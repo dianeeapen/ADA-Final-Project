@@ -1,0 +1,402 @@
+---
+Project: "The Nutrition Transition in Ecuador: Processed Food Consumption among Children in a Mixed-indigenous, Rural Community"
+Purpose: "Data analysis for determining the effects of ultra-processed food consumption on child growth and development in rural Ecuador" 
+Data: "Filename: Lulun2.txt, de-identified data"
+Project IRB: "IRB # 201704100" 
+Author: "Diane Eapen"
+Created: "March 3, 2018"
+Latest: "April 25, 2018"
+output: html_notebook 
+---
+
+```{r}
+```
+
+#Packages used for this analysis:
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(foreign)
+library(knitr)
+library(readr)
+library(haven)
+library(dplyr)
+library(Hmisc)
+library(pastecs)
+
+```
+
+#Uploading Lulun II Data
+
+```{r}
+
+LulunIIData_v2 <- read.delim("/Users/dianeelizabetheapen/Desktop/MRF 2016-2018/2017-2018/Ecuador and Sugar Consumption /data/Lulun2.txt")
+
+#Subsetting data to remove cases with missing responses from the group variable
+LulunIIData_v2$grupo[LulunIIData_v2$grupo==""] <- NA 
+
+#Converting age from months to years
+LulunIIData_v2$ageyears <- LulunIIData_v2$agemos/12
+
+```
+
+#Recoding Data:
+
+##Categorizing BMIz, all according to WHO Growth Standards, 2008
+
+```{r}
+attach(LulunIIData_v2)
+LulunIIData_v2$bmiz_cat[bmiz_LulunII >1] <- 1 # 1 = "Possible Risk of Overweight", "Overweight" and "Obese"
+LulunIIData_v2$bmiz_cat[bmiz_LulunII <=1] <- 0 # 0 = "Normal"
+detach(LulunIIData_v2)
+
+#Checking recoded BMIz
+table(LulunIIData_v2$bmiz_cat)
+
+#81 = normal 
+#50 = those who are either overweight or obese or at possible risk of overweight according to WHO Child Growth Standards
+```
+
+##Categorizing HAZ
+
+```{r}
+
+attach(LulunIIData_v2)
+LulunIIData_v2$HAZ_cat[haz_LulunII >= -2] <- 0 # 0 = "Normal"
+LulunIIData_v2$HAZ_cat[haz_LulunII < -2 ] <- 1 # 1 = "Stunted"
+detach(LulunIIData_v2)
+
+#Checking recoded HAZ
+table(LulunIIData_v2$HAZ_cat)
+
+67+65
+67/132 #Not stunted = 50.8%, in entire sample
+65/132 #Stunted = 49.2% 
+
+table(Lulun_Control$HAZ_cat)
+30/(30+32) #Not stunted = 48.4%
+32/(30+32) #Stunted = 51.6%
+
+stat.desc(Lulun_Control$haz_diff3)
+stat.desc(Lulun_Egg$haz_diff3)
+
+
+table(Lulun_Egg$HAZ_cat)
+37/(37+33) #Not stunted = 52.9%
+33/(37+33) #Stunted = 47.1%
+
+```
+
+#Subsetting Lulun II Data in to Control and Intervention Groups
+
+```{r}
+
+#Subsetting data into RCT control group and intervention group 
+Lulun_Control <- subset(LulunIIData_v2, LulunIIData_v2$grupo == "control")
+Lulun_Egg <- subset(LulunIIData_v2, LulunIIData_v2$grupo == "egg")
+table
+```
+
+##Control Descriptives
+
+```{r}
+attach(Lulun_Control)
+stat.desc(sex)
+stat.desc(weight)
+stat.desc(height)
+stat.desc(haz_LulunII)
+stat.desc(waz_LulunII)
+stat.desc(whz_LulunII)
+stat.desc(bmiz_LulunII)
+stat.desc(bmiz_cat)
+detach(Lulun_Control)
+
+attach(Lulun_Control)
+stat.desc(haz_baseline)
+stat.desc(haz_end)
+detach(Lulun_Control)
+
+table(Lulun_Control$sex)
+```
+
+##Intervention Descriptives
+
+```{r}
+attach(Lulun_Egg)
+stat.desc(sex)
+stat.desc(weight)
+stat.desc(height)
+stat.desc(haz_baseline)
+stat.desc(haz_end)
+stat.desc(haz_LulunII)
+stat.desc(waz_LulunII)
+stat.desc(whz_LulunII)
+stat.desc(bmiz_LulunII)
+stat.desc(bmiz_cat)
+detach(Lulun_Egg)
+
+table(Lulun_Egg$sex)
+range(Lulun_Egg$height)
+
+```
+
+#Packages for logisitc regression
+
+```{r}
+
+library(readr)  #for read txt file
+library(knitr)  #for creating nicer tables
+library(tidyverse)  # for various packages
+library(MASS)  #Ordinal logistic regression
+library(erer)  #Average marginal effects for the rdinal logistic regression
+```
+
+#Recoded Animal_Own_Tot into a categorical variable (too many animals to one subject, i.e. 500 guinea pigs)
+
+```{r}
+stat.desc(LulunIIData_v2$Food_Prod_Tot)
+stat.desc(LulunIIData_v2$Animal_Own_Tot)
+
+attach(LulunIIData_v2)
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 1 & LulunIIData_v2$Animal_Own_Tot <= 5] <- 1 #0-5 animals
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 5 & LulunIIData_v2$Animal_Own_Tot <= 10] <- 2 #6-10 animals
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 10 & LulunIIData_v2$Animal_Own_Tot <= 15] <- 3 #10-15 animals
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 15 & LulunIIData_v2$Animal_Own_Tot <= 20] <- 4 #15-20 animals
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 20 & LulunIIData_v2$Animal_Own_Tot <= 25] <- 5 #15-20 animals
+LulunIIData_v2$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 25] <- 6 #15-20 animals
+LulunIIData_v2$animal_own_tot_cat 
+detach(LulunIIData_v2)
+
+```
+
+##Test assumptions of linearity, influence, and check percent correctly predicted for BMI in a logistic model
+
+```{r}
+
+# influence plots
+# Cook's D plot-identifies observation number in parent dataset
+mylogit1<-glm(bmiz_cat ~ juice_sugar, data=LulunIIData_v2, family="binomial") 
+  plot(mylogit1, which=4, id.n=5, col="red") 
+  
+  mylogit2<-glm(HAZ_cat ~ juice_sugar, data=LulunIIData_v2, family="binomial") 
+  plot(mylogit2, which=4, id.n=5, col="red") 
+  
+#checking percent correctly predicted 
+xt1<-table(round(predict(mylogit1, type="response")), mylogit1$model$bmiz_cat) 
+  xt1  
+  
+xt2<-table(round(predict(mylogit2, type="response")), mylogit2$model$HAZ_cat) 
+  xt2 
+  
+#Calculating sensitivity and specificity of the model 
+xt3<- xt1/sum(xt1)
+  xt3
+  p<-sum(diag(xt3))
+  p #proportion of bmi (yes risk for overweight or overwieght or obese bmi z-score) correctly classified by the model
+  
+xt4<- xt2/sum(xt2)
+  xt4
+  p<-sum(diag(xt4))
+  p #proportion of haz (yes stunted) correctly classified by the model
+
+```
+
+#Binomial Log Regression Model to explore any unexpected associations
+
+```{r}
+
+#Checking variables in 2x2 tables 
+table(LulunIIData_v2$bmiz_cat)
+table(LulunIIData_v2$HAZ_cat)
+table(LulunIIData_v2$work_you)
+table(LulunIIData_v2$relation)
+table(LulunIIData_v2$animal_own) #a lot more people who have animals
+table(LulunIIData_v2$food_prod) #food prod a lot more people who produce 
+
+#Checking bmiz_cat variable
+table(LulunIIData_v2$bmiz_cat)
+table(LulunIIData_v2$bmiz_cat)
+table(LulunIIData_v2$bmiz_cat)
+table(LulunIIData_v2$bmiz_cat)
+table(LulunIIData_v2$bmiz_cat)
+
+#Model with sex as a predictor variable to check for potential confounding 
+modsex <-glm(bmiz_cat ~ sex, data=LulunIIData_v2, family="binomial") #Box Tidwell technique, test the assumption of linearity
+summary(modsex) #Not signficant
+
+```
+
+#Binomial Log Regression Model for the Research Question**
+
+```{r}
+#Model with HAZ (a growth indicator and, thus, outcome variable)
+modh1 <- glm(HAZ_cat ~ sug_drink + juice_sugar + soda + sug_foods + salty_snacks + animal_own + food_prod + work_you + bmiz_cat, data=LulunIIData_v2, family = "binomial")
+summary(modh1)
+ORmodh1 <- exp(cbind(OR = coef(modh1), confint(modh1))) 
+ORmodh1
+
+#Model with BMIz as outcome variable (a growth indicator as well), and HAZ (for association between the two growth indicators), the 5 junk foods, household food production, animal ownership, and caretakers' employment statuses as the predictor varibales 
+#Forced entry regression
+
+modb1 <- glm(bmiz_cat ~ HAZ_cat + sug_drink + juice_sugar + soda + sug_foods + salty_snacks + animal_own + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb1) #Note: residual deviance and df are pretty close to each other, therefore, no risk of error from overdispersion
+
+
+#Odds ratios and 95% CI's
+ORmodb1 <- exp(cbind(OR = coef(modb1), confint(modb1))) 
+ORmodb1
+table(ORmodb1)
+
+#p value and OR 95% CI codes
+
+ORmodb1 <- coef(summary(modb1))
+
+p <- pnorm(abs(table1["t value"]), lower.tail = FALSE) * 2
+p
+
+## combined table with OR's and 95% CI's
+
+ORmodb1 <- cbind(table1, `p value` = p)
+
+ORmodb1 <- exp(cbind(OR = coef(modb1), confint(modb1))) 
+ORmodb1 
+
+table(ORmodb1)
+
+#Cook's D plot
+plot(modb1, which=4, id.n=5, col="red", cex.id=0.60) 
+
+#identify observations with a Cook's D greater than 0.0015 
+y<-as.data.frame(cooks.distance(modb1))
+colnames(y)[1]<-"CD"
+y$obs_no<-rownames(y)
+z<-y[which(y$CD>0.0015),]
+z$obs_no
+
+#Classification
+xt<-table(round(predict(modb1, type="response")), modb1$model$bmiz_cat)
+  xt
+  xt2<- xt/sum(xt)
+  xt2
+  p<-sum(diag(xt2))
+  p #proportion of bmi (yes risk for overweight or overwieght or obese bmi z-score) correctly classified by the model
+  
+  #Note: there were 7 influential points in the model 
+ 
+```
+
+#Removal of influential points (exploratory)
+
+```{r}
+   
+#Removed these observations
+LulunIIData_v3 <- read.delim("/Users/dianeelizabetheapen/Desktop/MRF 2016-2018/2017-2018/Ecuador and Sugar Consumption /data/Lulun2_subset1.txt")
+
+#Subsetting data to remove cases with missing responses from the group variable
+LulunIIData_v3$grupo[LulunIIData_v2$grupo==""] <- NA 
+
+attach(LulunIIData_v3)
+LulunIIData_v3$bmiz_cat[bmiz_LulunII >1] <- 1 # 1 = "Possible Risk of Overweight", "Overweight" and "Obese"
+LulunIIData_v3$bmiz_cat[bmiz_LulunII <=1] <- 0 # 0 = "Normal"
+detach(LulunIIData_v3)
+
+
+attach(LulunIIData_v3)
+LulunIIData_v3$HAZ_cat[haz_LulunII >= -2] <- 0 # 0 = "Normal"
+LulunIIData_v3$HAZ_cat[haz_LulunII < -2 ] <- 1 # 1 = "Stunted"
+detach(LulunIIData_v3)
+
+
+attach(LulunIIData_v3)
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 1 & LulunIIData_v3$Animal_Own_Tot <= 5] <- 1 #0-5 animals
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 5 & LulunIIData_v3$Animal_Own_Tot <= 10] <- 2 #6-10 animals
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 10 & LulunIIData_v3$Animal_Own_Tot <= 15] <- 3 #10-15 animals
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 15 & LulunIIData_v3$Animal_Own_Tot <= 20] <- 4 #15-20 animals
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 20 & LulunIIData_v3$Animal_Own_Tot <= 25] <- 5 #15-20 animals
+LulunIIData_v3$animal_own_tot_cat[LulunIIData_v2$Animal_Own_Tot > 25] <- 6 #15-20 animals
+LulunIIData_v3$animal_own_tot_cat 
+detach(LulunIIData_v3)
+
+```
+
+#Same regression from modb1, but without influential points, from subsetted dataset "LulunIIData_v3"
+
+```{r}
+modb1_sub <- glm(bmiz_cat ~ HAZ_cat + sug_drink + juice_sugar + soda + sug_foods + salty_snacks + animal_own + food_prod + work_you, data=LulunIIData_v3, family = "binomial")
+summary(modb1_sub) #Note: modb1_sub = subsetted data without influential points
+
+#Cook's D plot
+plot(modb1_sub, which=4, id.n=5, col="red", cex.id=0.60) 
+
+#identify observations with a Cook's D greater than 0.0015 
+y<-as.data.frame(cooks.distance(modb1_sub))
+colnames(y)[1]<-"CD"
+y$obs_no<-rownames(y)
+z<-y[which(y$CD>0.0015),]
+z$obs_no
+
+#Note: still not significant assocition between bmiz_cat and UPF's
+#Odds ratios and 95% CI's (just to check)
+ORmodb1_sub <- exp(cbind(OR = coef(modb1_sub), confint(modb1_sub))) 
+ORmodb1_sub
+table(ORmodb1_sub)
+
+```
+
+#Stepwise regressions (for exploratory purposes)
+##Removal of processed foods from the model to check for potential confounding 
+
+```{r}
+modb2 <- glm(bmiz_cat ~ HAZ_cat + food_prod + work_you + relation, data=LulunIIData_v2, family = "binomial")
+summary(modb2)
+ORmodb2 <- exp(cbind(OR = coef(modb2), confint(modb2))) 
+ORmodb2
+
+
+#Removal of all variables except for caretakers employment status and caretaker's relation to child
+modb3 <- glm(bmiz_cat ~ work_you + relation, data=LulunIIData_v2, family = "binomial")
+summary(modb3)
+ORmodb3 <- exp(cbind(OR = coef(modb3), confint(modb3))) 
+
+
+#removal of all vairables except for animal ownership
+modb4 <- glm(bmiz_cat ~ animal_own, data=LulunIIData_v2, family = "binomial")
+summary(modb4)
+
+#removal of all vairables except for household food production
+modb5 <- glm(bmiz_cat ~ food_prod, data=LulunIIData_v2, family = "binomial")
+summary(modb5)
+
+#model with just household food production and animal owenership
+modb6 <- glm(bmiz_cat ~ animal_own + food_prod, data=LulunIIData_v2, family = "binomial")
+summary(modb6)
+
+#model with just household food production, HAZ and employment status
+modb7 <- glm(bmiz_cat ~ HAZ_cat + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb7)
+
+#Same model as modb7 but adding in the junk foods individually
+#model with just household food production, HAZ and employment status and sugary drinks
+modb8 <- glm(bmiz_cat ~ HAZ_cat + sug_drink + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb8)
+
+#model with just household food production, HAZ and employment status and juices with added sugars
+modb9 <- glm(bmiz_cat ~ HAZ_cat + juice_sugar + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb9)
+
+#model with just household food production, HAZ and employment status and sodas
+modb10 <- glm(bmiz_cat ~ HAZ_cat + soda + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb10)
+
+#model with just household food production, HAZ and employment status and sugary foods
+modb11 <- glm(bmiz_cat ~ HAZ_cat + sug_foods + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb11)
+
+#model with just household food production, HAZ and employment status and salty snacks
+modb12 <- glm(bmiz_cat ~ HAZ_cat + salty_snacks  + food_prod + work_you, data=LulunIIData_v2, family = "binomial")
+summary(modb12)
+
+
+
+```
